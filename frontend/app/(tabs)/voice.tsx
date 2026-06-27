@@ -114,7 +114,7 @@ export default function VoiceTab() {
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
           <Text style={styles.title} testID="voice-title">Voice Entry</Text>
-          <Text style={styles.subtitle}>Bolein: "Ramesh 450 udhaar" ya "Suresh 200 payment"</Text>
+      <Text style={styles.subtitle}>Bolein: {'"Ramesh 450 udhaar"'} ya {'"Suresh 200 payment"'}</Text>
 
           <View style={styles.center}>
             <Animated.View style={[styles.micRing, recording && styles.micRingActive, pulseStyle]}>
@@ -160,7 +160,7 @@ export default function VoiceTab() {
                 testID="voice-manual-input"
                 value={manualText}
                 onChangeText={setManualText}
-                placeholder='e.g. "Ramesh 450 udhaar"'
+                placeholder={'e.g. "Ramesh 450 udhaar"'}
                 placeholderTextColor={Colors.muted}
                 style={styles.manualInput}
               />
@@ -206,3 +206,4 @@ const styles = StyleSheet.create({
   },
   manualBtn: { width: 52, height: 52, borderRadius: Radius.md, backgroundColor: Colors.brand, alignItems: "center", justifyContent: "center" },
 });
+
