@@ -1,0 +1,155 @@
+{
+  "app_name": "Kirana Udhaar Tracker",
+  "personality": "1 iOS-Native Clean",
+  "personality_one_liner": "A trustworthy, highly legible, high-contrast utility for Indian small business owners, featuring oversized typography and unambiguous semantic colors.",
+  "color": {
+    "surface": "#FFFFFF",
+    "onSurface": "#171717",
+    "surfaceSecondary": "#F4F4F5",
+    "onSurfaceSecondary": "#3F3F46",
+    "surfaceTertiary": "#E4E4E7",
+    "onSurfaceTertiary": "#52525B",
+    "surfaceInverse": "#171717",
+    "onSurfaceInverse": "#FFFFFF",
+    "brand": "#171717",
+    "brandPrimary": "#171717",
+    "onBrandPrimary": "#FFFFFF",
+    "brandSecondary": "#3F3F46",
+    "onBrandSecondary": "#FFFFFF",
+    "brandTertiary": "#E4E4E7",
+    "onBrandTertiary": "#171717",
+    "success": "#16A34A",
+    "onSuccess": "#FFFFFF",
+    "warning": "#D97706",
+    "onWarning": "#FFFFFF",
+    "error": "#DC2626",
+    "onError": "#FFFFFF",
+    "info": "#0284C7",
+    "onInfo": "#FFFFFF",
+    "border": "#E4E4E7",
+    "borderStrong": "#A1A1AA",
+    "divider": "#F4F4F5"
+  },
+  "typography": {
+    "displayFontFamily": "Plus Jakarta Sans",
+    "textFontFamily": "Plus Jakarta Sans",
+    "scale": {
+      "sm": 12,
+      "base": 14,
+      "lg": 16,
+      "xl": 20,
+      "2xl": 24
+    }
+  },
+  "spacing": {
+    "rule": "Generous padding for touch targets (min 56pt height for list items). Sticky bottom CTA above safe area.",
+    "xs": 4,
+    "sm": 8,
+    "md": 12,
+    "lg": 16,
+    "xl": 24,
+    "2xl": 32,
+    "3xl": 48
+  },
+  "radius_tokens": {
+    "sm": 6,
+    "md": 12,
+    "lg": 20,
+    "pill": 999
+  },
+  "shadow_tier": "1",
+  "navigation": "bottom_tabs",
+  "icon_set": "Ionicons",
+  "glassmorphism": {
+    "enabled": "false",
+    "do's": [
+      "Use solid surfaceSecondary instead of glass to ensure maximum legibility for Kirana owners under sunlight."
+    ],
+    "dont's": [
+      "No blur on headers or FABs. Keep it flat and high contrast."
+    ]
+  },
+  "platform_libraries": {
+    "glass": {
+      "ios": "expo-glass-effect",
+      "android": "expo-blur",
+      "low_end_android_fallback": "solid surfaceSecondary"
+    },
+    "image": "expo-image",
+    "blur": "expo-blur",
+    "bottom_sheet": "@gorhom/bottom-sheet",
+    "animation": "react-native-reanimated",
+    "gesture": "react-native-gesture-handler"
+  },
+  "screens": [
+    {
+      "name": "Dashboard",
+      "purpose": "Quickly see total outstanding Udhaar and a list of all customers with their current balance.",
+      "states": {
+        "loading": "Centered spinner",
+        "empty": "Illustration of a shop + 'No customers yet. Add your first customer.'",
+        "error": "Message + Retry"
+      },
+      "layout": "Top half: A large 'Hero Card' showing 'Total Udhaar (Outstanding)' with a huge red number. Bottom half: Search bar (with inline Voice Mic icon) and a Customer List. Each row shows Name, Phone, Risk Badge dot (Red >30d, Yellow 15-30d, Green recent), and a large Red/Green balance. Use a prominent FAB for 'Add Voice Transaction'."
+    },
+    {
+      "name": "Customer Detail",
+      "purpose": "View full transaction history for a single customer and send WhatsApp reminders.",
+      "states": {
+        "loading": "Skeleton rows",
+        "empty": "Text 'No transactions yet.'",
+        "error": "Message + Retry"
+      },
+      "layout": "Header shows Name and Phone. Just below, a sticky 'Running Balance' card. Below that, a list of transactions (Credit = Red, Payment = Green). Sticky bottom container with two huge buttons: 'Send Reminder (WhatsApp)' and 'Add Transaction'."
+    },
+    {
+      "name": "Add Transaction",
+      "purpose": "Manually enter a credit (Udhaar) or payment (Jama) for a customer.",
+      "states": {
+        "loading": "Saving...",
+        "empty": "Form fields: Amount (giant text input), Segmented Control (Udhaar / Jama), Date, Note.",
+        "error": "Validation error"
+      },
+      "layout": "Bottom sheet or modal. Segmented control to switch between Red (Udhaar given) and Green (Payment received). Large numeric keypad or giant text input for Amount. Sticky 'Save Transaction' button at the bottom."
+    },
+    {
+      "name": "Voice Entry (Modal)",
+      "purpose": "Listen to the owner's voice ('Ramesh 450 udhaar') and parse it.",
+      "states": {
+        "loading": "Listening / Processing...",
+        "empty": "Pulsing large microphone icon, text 'Bolna shuru karein...'",
+        "error": "Could not understand. Retry."
+      },
+      "layout": "Full screen overlay or large sheet. A massive pulsing mic icon in the center. Real-time transcription text below it. Once parsed, auto-fills and transitions to 'Add Transaction' confirmation."
+    }
+  ],
+  "images": {
+    "dashboard_empty_state": {
+      "url": "https://images.unsplash.com/photo-1610014331379-f2a27bde2b66",
+      "dark": "https://images.unsplash.com/photo-1610014331379-f2a27bde2b66",
+      "alt": "Indian kirana shop front"
+    },
+    "customer_empty_state": {
+      "url": "https://images.pexels.com/photos/8296977/pexels-photo-8296977.jpeg",
+      "dark": "https://images.pexels.com/photos/8296977/pexels-photo-8296977.jpeg",
+      "alt": "Accountant with calculator and ledger notebook"
+    }
+  },
+  "instructions_to_main_agent": [
+    "Follow standard <Rules>: Ensure iOS safe area is respected, touch targets >= 44pt.",
+    "Implement high-contrast UI: specifically, Red (#DC2626) is for Udhaar (credit given to customer, shop's negative cashflow) and Green (#16A34A) is for Jama (payment received). THIS IS CRITICAL AND OPPOSITE OF STANDARD BANKING.",
+    "Typography must be oversized and clear. Use Plus Jakarta Sans. Mixed Hindi/English labels (e.g., 'Total Udhaar', 'Jama (Paid)').",
+    "Include a WhatsApp reminder button in the Customer Detail view. Pre-fill text: 'Namaste [Name], aapka ₹[amount] udhaar pending hai. - [Shop Name]'.",
+    "Risk Badge Logic: For pending dues > 30 days = Red badge/dot. 15-30 days = Yellow. < 15 days or cleared = Green.",
+    "Voice entry integration: Dedicate a prominent Mic button (in dashboard or FAB). It should open a Voice Entry Modal, capture speech, and map 'name', 'amount', 'type' into the Add Transaction form.",
+    "Do NOT use glassmorphism; use solid `surfaceSecondary` for sheets/cards to ensure daylight readability for shop owners.",
+    "Ensure 'Submit' buttons are sticky above the keyboard using `KeyboardAvoidingView`."
+  ],
+  "haptics": {
+    "primary_button_press": "impactLight",
+    "voice_mic_start": "impactMedium",
+    "voice_mic_stop": "impactHeavy",
+    "transaction_save_success": "notificationSuccess",
+    "tab_change": "selection"
+  }
+}
