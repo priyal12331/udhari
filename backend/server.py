@@ -169,10 +169,9 @@ async def update_shop_name(payload: ShopNameUpdate):
 
 
 # ---------- Customers ----------
-async def _compute_customer_view(customer: dict) -> CustomerOut:
+def _compute_view_from_txs(customer: dict, txs: List[dict]) -> CustomerOut:
+    """Pure computation — no DB calls. Pass the already-fetched txs for this customer."""
     cid = customer["id"]
-    cursor = db.transactions.find({"customer_id": cid}, {"_id": 0})
-    txs = await cursor.to_list(10000)
     balance = 0.0
     last_credit_at: Optional[datetime] = None
     last_tx_at: Optional[datetime] = None
@@ -192,9 +191,6 @@ async def _compute_customer_view(customer: dict) -> CustomerOut:
     # Risk: based on oldest unpaid credit age. If balance <= 0 → green.
     risk = "green"
     if balance > 0 and last_credit_at:
-        # Find the earliest unpaid credit. Simpler: use oldest credit since last payment fully covering.
-        # Approximation: use date of the oldest credit that contributes to outstanding.
-        # We'll compute by walking transactions sorted by date and finding earliest credit that is not yet offset.
         txs_sorted = sorted(txs, key=lambda x: x["date"])
         oldest_unpaid: Optional[datetime] = None
         # Track credits FIFO
@@ -250,17 +246,23 @@ async def create_customer(payload: CustomerCreate):
         "created_at": iso(now_utc()),
     }
     await db.customers.insert_one({**cust})
-    return await _compute_customer_view(cust)
+    # New customer has no transactions yet
+    return _compute_view_from_txs(cust, [])
 
 
 @api_router.get("/customers", response_model=List[CustomerOut])
 async def list_customers():
-    cursor = db.customers.find({}, {"_id": 0}).sort("created_at", -1)
-    customers = await cursor.to_list(10000)
-    out = []
-    for c in customers:
-        out.append(await _compute_customer_view(c))
-    return out
+    customers = await db.customers.find({}, {"_id": 0}).sort("created_at", -1).to_list(10000)
+    cust_ids = [c["id"] for c in customers]
+    # Single batched query for all transactions belonging to these customers
+    all_txs = await db.transactions.find(
+        {"customer_id": {"$in": cust_ids}},
+        {"_id": 0, "customer_id": 1, "type": 1, "amount": 1, "date": 1},
+    ).to_list(100000)
+    grouped: dict[str, list] = {}
+    for t in all_txs:
+        grouped.setdefault(t["customer_id"], []).append(t)
+    return [_compute_view_from_txs(c, grouped.get(c["id"], [])) for c in customers]
 
 
 @api_router.get("/customers/{customer_id}", response_model=CustomerOut)
@@ -268,7 +270,11 @@ async def get_customer(customer_id: str):
     c = await db.customers.find_one({"id": customer_id}, {"_id": 0})
     if not c:
         raise HTTPException(404, "Customer not found")
-    return await _compute_customer_view(c)
+    txs = await db.transactions.find(
+        {"customer_id": customer_id},
+        {"_id": 0, "type": 1, "amount": 1, "date": 1},
+    ).to_list(10000)
+    return _compute_view_from_txs(c, txs)
 
 
 @api_router.delete("/customers/{customer_id}")
@@ -342,11 +348,20 @@ async def delete_tx(tx_id: str):
 @api_router.get("/dashboard", response_model=DashboardOut)
 async def dashboard():
     customers = await db.customers.find({}, {"_id": 0}).sort("created_at", -1).to_list(10000)
+    cust_ids = [c["id"] for c in customers]
+    all_txs = await db.transactions.find(
+        {"customer_id": {"$in": cust_ids}},
+        {"_id": 0, "customer_id": 1, "type": 1, "amount": 1, "date": 1},
+    ).to_list(100000)
+    grouped: dict[str, list] = {}
+    for t in all_txs:
+        grouped.setdefault(t["customer_id"], []).append(t)
+
     out_customers = []
     total = 0.0
     with_dues = 0
     for c in customers:
-        view = await _compute_customer_view(c)
+        view = _compute_view_from_txs(c, grouped.get(c["id"], []))
         out_customers.append(view)
         if view.balance > 0:
             total += view.balance
