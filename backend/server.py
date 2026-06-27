@@ -443,7 +443,7 @@ async def voice_parse(file: UploadFile = File(...)):
                 "Return ONLY strict JSON with keys: name (string|null), amount (number|null), type ('credit'|'payment'|null). "
                 "No extra text."
             ),
-        ).with_model("openai", "gpt-5.4-mini")
+        ).with_model("openai", "gpt-4o-mini")
 
         full = ""
         from emergentintegrations.llm.chat import TextDelta, StreamDone
