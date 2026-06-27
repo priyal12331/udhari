@@ -57,6 +57,13 @@ export default function VoiceTab() {
     }
     try {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+
+      // Fix: Set audio mode for iOS recording BEFORE prepareToRecordAsync
+      await AudioModule.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+      });
+
       await recorder.prepareToRecordAsync();
       recorder.record();
       setRecording(true);
@@ -70,6 +77,12 @@ export default function VoiceTab() {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {});
       await recorder.stop();
       setRecording(false);
+
+      // Fix: Reset audio mode after recording stops
+      await AudioModule.setAudioModeAsync({
+        allowsRecordingIOS: false,
+      });
+
       const uri = recorder.uri;
       if (!uri) { setErr(t('voiceCaptureFailed')); return; }
       setProcessing(true);
@@ -116,7 +129,7 @@ export default function VoiceTab() {
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
           <Text style={styles.title} testID="voice-title">{t('voiceTitle')}</Text>
-      <Text style={styles.subtitle}>{t('voiceSubtitle')}</Text>
+          <Text style={styles.subtitle}>{t('voiceSubtitle')}</Text>
 
           <View style={styles.center}>
             <Animated.View style={[styles.micRing, recording && styles.micRingActive, pulseStyle]}>
@@ -208,4 +221,3 @@ const styles = StyleSheet.create({
   },
   manualBtn: { width: 52, height: 52, borderRadius: Radius.md, backgroundColor: Colors.brand, alignItems: "center", justifyContent: "center" },
 });
-

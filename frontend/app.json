@@ -1,15 +1,16 @@
 {
   "expo": {
     "name": "Kirana Udhaar",
-    "slug": "frontend",
+    "slug": "kirana-udhaar",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "frontend",
+    "scheme": "kirana-udhaar",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
+      "bundleIdentifier": "com.priyal.kiranaudhaar",
       "infoPlist": {
         "NSMicrophoneUsageDescription": "Voice se entries ke liye microphone access chahiye"
       }
@@ -20,6 +21,7 @@
         "backgroundColor": "#FFFFFF"
       },
       "edgeToEdgeEnabled": true,
+      "package": "com.priyal.kiranaudhaar",
       "permissions": [
         "android.permission.RECORD_AUDIO"
       ]
