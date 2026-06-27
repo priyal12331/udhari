@@ -1,9 +1,10 @@
 import React from "react";
 import { View, Text, Pressable, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { Colors, Font, Radius, Spacing } from "@/src/theme";
+import { Colors, Font, Spacing } from "@/src/theme";
 import { Customer } from "@/src/api";
 import { formatINR } from "@/src/theme";
+import { useLocale } from "@/src/i18n/LocaleContext";
 
 type Props = {
   customer: Customer;
@@ -11,6 +12,7 @@ type Props = {
 };
 
 export function CustomerRow({ customer, onPress }: Props) {
+  const { t } = useLocale();
   const owes = customer.balance > 0;
   const cleared = customer.balance <= 0;
   const balanceColor = owes ? Colors.udhaar : Colors.jama;
@@ -39,7 +41,7 @@ export function CustomerRow({ customer, onPress }: Props) {
           {cleared && customer.balance === 0 ? formatINR(0) : formatINR(customer.balance)}
         </Text>
         <Text style={[styles.balanceLabel, { color: balanceColor }]}>
-          {owes ? "Udhaar baaki" : "Hisaab clear"}
+          {owes ? t('rowUdhaarPending') : t('rowCleared')}
         </Text>
       </View>
       <Ionicons name="chevron-forward" size={20} color={Colors.borderStrong} />

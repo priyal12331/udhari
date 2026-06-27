@@ -7,6 +7,7 @@ import { useLocalSearchParams, useFocusEffect, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { Api, Customer, Transaction } from "@/src/api";
+import { useLocale } from "@/src/i18n/LocaleContext";
 import { Colors, Font, formatINR, Radius, Spacing } from "@/src/theme";
 
 function fmtDate(d: Date, withTime = false): string {
@@ -20,6 +21,7 @@ function fmtDate(d: Date, withTime = false): string {
 export default function CustomerDetail() {
   const { id, notify_tx } = useLocalSearchParams<{ id: string; notify_tx?: string }>();
   const router = useRouter();
+  const { t } = useLocale();
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [txs, setTxs] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
@@ -44,17 +46,18 @@ export default function CustomerDetail() {
 
   const buildReminderMessage = (cust: Customer): string => {
     const amount = Math.max(0, Math.round(cust.balance));
-    return `Namaste ${cust.name}, aapka ₹${amount} udhaar pending hai. - ${shopName || "Aapki Dukaan"}`;
+    const shop = shopName || t('waDefaultShop');
+    return t('waReminder', { name: cust.name, amount, shop });
   };
 
   const buildReceiptMessage = (cust: Customer, tx: Transaction): string => {
     const amount = Math.round(tx.amount);
     const dstr = fmtDate(new Date(tx.date));
-    const sn = shopName || "Aapki Dukaan";
+    const shop = shopName || t('waDefaultShop');
     if (tx.type === "credit") {
-      return `Namaste! Aapne aaj ${sn} se ₹${amount} udhaar liya hai ${dstr} ko. Yeh aapki receipt hai. - ${sn}`;
+      return t('waCreditReceipt', { shop, amount, date: dstr });
     }
-    return `Namaste ${cust.name}, aapka ₹${amount} payment ${sn} ne ${dstr} ko receive kar liya hai. Dhanyavaad! - ${sn}`;
+    return t('waPaymentReceipt', { name: cust.name, shop, amount, date: dstr });
   };
 
   const openWhatsAppWith = async (phone: string, message: string): Promise<boolean> => {
@@ -122,7 +125,7 @@ export default function CustomerDetail() {
       </View>
 
       <View style={styles.balanceCard} testID="detail-balance-card">
-        <Text style={styles.balanceLabel}>{owes ? "Outstanding Udhaar" : "Hisaab"}</Text>
+        <Text style={styles.balanceLabel}>{owes ? t('detailOutstanding') : t('detailBalance')}</Text>
         <Text style={[styles.balanceAmount, { color: owes ? Colors.udhaar : Colors.jama }]} testID="detail-balance">
           {formatINR(Math.abs(customer.balance))}
         </Text>
@@ -132,7 +135,7 @@ export default function CustomerDetail() {
           <View style={[styles.riskPill, { backgroundColor:
             customer.risk === "red" ? Colors.riskRed : customer.risk === "yellow" ? Colors.riskYellow : Colors.riskGreen }]}>
             <Text style={styles.riskPillText}>
-              {customer.risk === "red" ? "30+ days" : customer.risk === "yellow" ? "15-30 days" : "Recent"}
+              {customer.risk === "red" ? t('detailRiskOld') : customer.risk === "yellow" ? t('detailRiskMid') : t('detailRiskRecent')}
             </Text>
           </View>
         </View>
@@ -149,9 +152,11 @@ export default function CustomerDetail() {
                   <Ionicons name="logo-whatsapp" size={22} color="#25D366" />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.bannerTitle}>Receipt WhatsApp pe bhejein?</Text>
+                  <Text style={styles.bannerTitle}>{t('detailReceiptBanner')}</Text>
                   <Text style={styles.bannerSub} numberOfLines={2}>
-                    {justAddedTx.type === "credit" ? "Customer ko ₹" + Math.round(justAddedTx.amount) + " udhaar ka digital proof bhej dein" : "Payment ki rasid customer ko bhej dein"}
+                    {justAddedTx.type === "credit"
+                      ? t('detailReceiptCredit', { amount: Math.round(justAddedTx.amount) })
+                      : t('detailReceiptPayment')}
                   </Text>
                 </View>
                 <View style={styles.bannerActions}>
@@ -164,7 +169,7 @@ export default function CustomerDetail() {
                     {sendingId === justAddedTx.id ? (
                       <ActivityIndicator color="#fff" size="small" />
                     ) : (
-                      <Text style={styles.bannerSendText}>Bhejo</Text>
+                      <Text style={styles.bannerSendText}>{t('detailSend')}</Text>
                     )}
                   </Pressable>
                   <Pressable
@@ -177,7 +182,7 @@ export default function CustomerDetail() {
                 </View>
               </View>
             )}
-            <Text style={styles.section}>Transaction History</Text>
+            <Text style={styles.section}>{t('detailTxHistory')}</Text>
           </View>
         }
         renderItem={({ item }) => {
@@ -192,7 +197,7 @@ export default function CustomerDetail() {
                 <Ionicons name={isCredit ? "arrow-up" : "arrow-down"} size={18} color={color} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.txTitle}>{isCredit ? "Udhaar diya" : "Payment mila"}</Text>
+                <Text style={styles.txTitle}>{isCredit ? t('detailTxCredit') : t('detailTxPayment')}</Text>
                 {!!item.note && <Text style={styles.txNote} numberOfLines={1}>{item.note}</Text>}
                 <View style={styles.txMetaRow}>
                   <Text style={styles.txDate}>{dstr}</Text>
@@ -200,7 +205,7 @@ export default function CustomerDetail() {
                     <View style={styles.notifiedPill} testID={`tx-notified-${item.id}`}>
                       <Ionicons name="checkmark-circle" size={11} color="#25D366" />
                       <Text style={styles.notifiedText}>
-                        Sent {fmtDate(new Date(item.notified_at!))}
+                        {t('detailSent', { date: fmtDate(new Date(item.notified_at!)) })}
                       </Text>
                     </View>
                   )}
@@ -208,7 +213,7 @@ export default function CustomerDetail() {
               </View>
               <View style={{ alignItems: "flex-end", gap: 4 }}>
                 <Text style={[styles.txAmount, { color }]}>{isCredit ? "+" : "-"}{formatINR(item.amount)}</Text>
-                <Text style={styles.txRunning}>Bal {formatINR(item.running_balance)}</Text>
+                <Text style={styles.txRunning}>{t('detailBal')} {formatINR(item.running_balance)}</Text>
               </View>
               <Pressable
                 testID={`tx-send-receipt-${item.id}`}
@@ -229,7 +234,7 @@ export default function CustomerDetail() {
         ListEmptyComponent={
           <View style={styles.empty}>
             <Ionicons name="document-text-outline" size={48} color={Colors.borderStrong} />
-            <Text style={styles.emptyText}>Koi transaction nahi</Text>
+            <Text style={styles.emptyText}>{t('detailNoTx')}</Text>
           </View>
         }
         contentContainerStyle={{ paddingBottom: 180 }}
@@ -243,7 +248,7 @@ export default function CustomerDetail() {
           style={[styles.waBtn, !owes && { opacity: 0.4 }]}
         >
           <Ionicons name="logo-whatsapp" size={22} color="#fff" />
-          <Text style={styles.waBtnText}>Reminder</Text>
+          <Text style={styles.waBtnText}>{t('detailReminder')}</Text>
         </Pressable>
         <Pressable
           testID="detail-add-tx"
@@ -251,7 +256,7 @@ export default function CustomerDetail() {
           style={styles.addTxBtn}
         >
           <Ionicons name="add" size={22} color="#fff" />
-          <Text style={styles.addTxText}>Add Entry</Text>
+          <Text style={styles.addTxText}>{t('detailAddEntry')}</Text>
         </Pressable>
       </View>
     </SafeAreaView>

@@ -4,10 +4,12 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { Api } from "@/src/api";
+import { useLocale } from "@/src/i18n/LocaleContext";
 import { Colors, Font, Radius, Spacing } from "@/src/theme";
 
 export default function AddCustomer() {
   const router = useRouter();
+  const { t } = useLocale();
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [busy, setBusy] = useState(false);
@@ -15,13 +17,13 @@ export default function AddCustomer() {
 
   const save = async () => {
     setErr("");
-    if (!name.trim()) return setErr("Naam likhein");
-    if (!phone.trim()) return setErr("Phone likhein");
+    if (!name.trim()) return setErr(t('addCustNameRequired'));
+    if (!phone.trim()) return setErr(t('addCustPhoneRequired'));
     setBusy(true);
     try {
       const c = await Api.createCustomer(name.trim(), phone.trim());
       router.replace(`/customer/${c.id}`);
-    } catch (e: any) { setErr(e?.message || "Error"); } finally { setBusy(false); }
+    } catch (e: any) { setErr(e?.message || t('error')); } finally { setBusy(false); }
   };
 
   return (
@@ -31,24 +33,24 @@ export default function AddCustomer() {
           <Pressable onPress={() => router.back()} testID="addcust-close" hitSlop={10}>
             <Ionicons name="close" size={26} color={Colors.onSurface} />
           </Pressable>
-          <Text style={styles.title}>Naya Customer</Text>
+          <Text style={styles.title}>{t('addCustTitle')}</Text>
           <View style={{ width: 26 }} />
         </View>
         <View style={styles.body}>
-          <Text style={styles.label}>Naam · Name</Text>
+          <Text style={styles.label}>{t('addCustName')}</Text>
           <TextInput
             testID="addcust-name"
             value={name} onChangeText={setName}
-            placeholder="e.g. Ramesh Kumar"
+            placeholder={t('addCustNamePlaceholder')}
             placeholderTextColor={Colors.muted}
             style={styles.input}
             autoFocus
           />
-          <Text style={styles.label}>Phone number</Text>
+          <Text style={styles.label}>{t('addCustPhone')}</Text>
           <TextInput
             testID="addcust-phone"
             value={phone} onChangeText={setPhone}
-            placeholder="+91 98xxxxxxxx"
+            placeholder={t('addCustPhonePlaceholder')}
             placeholderTextColor={Colors.muted}
             style={styles.input}
             keyboardType="phone-pad"
@@ -57,7 +59,7 @@ export default function AddCustomer() {
         </View>
         <View style={styles.bottomBar}>
           <Pressable testID="addcust-save" onPress={save} disabled={busy} style={[styles.btn, busy && { opacity: 0.5 }]}>
-            <Text style={styles.btnText}>{busy ? "Save..." : "Save Customer"}</Text>
+            <Text style={styles.btnText}>{busy ? t('addCustSaving') : t('addCustSave')}</Text>
           </Pressable>
         </View>
       </KeyboardAvoidingView>

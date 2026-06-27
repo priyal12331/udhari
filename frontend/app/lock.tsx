@@ -6,10 +6,12 @@ import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { Api } from "@/src/api";
 import { Session } from "@/src/session";
+import { useLocale } from "@/src/i18n/LocaleContext";
 import { Colors, Font, Radius, Spacing } from "@/src/theme";
 
 export default function LockScreen() {
   const router = useRouter();
+  const { t } = useLocale();
   const [pin, setPin] = useState("");
   const [error, setError] = useState(false);
   const [shopName, setShopName] = useState("");
@@ -54,8 +56,8 @@ export default function LockScreen() {
     <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
       <View style={styles.top}>
         <View style={styles.iconWrap}><Ionicons name="lock-closed" size={28} color={Colors.brand} /></View>
-        <Text style={styles.title} testID="lock-title">{shopName || "Welcome"}</Text>
-        <Text style={styles.subtitle}>PIN daalein · Enter PIN</Text>
+        <Text style={styles.title} testID="lock-title">{shopName || t('lockWelcome')}</Text>
+        <Text style={styles.subtitle}>{t('lockSubtitle')}</Text>
         <View style={styles.dots} testID="lock-dots">
           {[0,1,2,3].map((i) => (
             <View

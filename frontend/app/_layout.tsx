@@ -6,6 +6,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 
 import { useIconFonts } from "@/src/hooks/use-icon-fonts";
+import { LocaleProvider } from "@/src/i18n/LocaleContext";
 
 LogBox.ignoreAllLogs(true);
 SplashScreen.preventAutoHideAsync();
@@ -24,10 +25,12 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#FFFFFF' } }}>
-          <Stack.Screen name="add-customer" options={{ presentation: 'modal' }} />
-          <Stack.Screen name="add-transaction" options={{ presentation: 'modal' }} />
-        </Stack>
+        <LocaleProvider>
+          <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#FFFFFF' } }}>
+            <Stack.Screen name="add-customer" options={{ presentation: 'modal' }} />
+            <Stack.Screen name="add-transaction" options={{ presentation: 'modal' }} />
+          </Stack>
+        </LocaleProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

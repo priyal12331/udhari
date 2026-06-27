@@ -5,11 +5,14 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { Api } from "@/src/api";
 import { Auth } from "@/src/auth";
+import { LanguageToggle } from "@/src/components/LanguageToggle";
+import { useLocale } from "@/src/i18n/LocaleContext";
 import { Session } from "@/src/session";
 import { Colors, Font, Radius, Spacing } from "@/src/theme";
 
 export default function SettingsTab() {
   const router = useRouter();
+  const { t } = useLocale();
   const [shopName, setShopName] = useState("");
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -25,7 +28,7 @@ export default function SettingsTab() {
     try {
       await Api.updateShopName(shopName.trim());
       setEditing(false);
-      setMsg("Saved");
+      setMsg(t('saved'));
       setTimeout(() => setMsg(""), 1500);
     } catch {} finally { setBusy(false); }
   };
@@ -34,9 +37,9 @@ export default function SettingsTab() {
     setBusy(true); setMsg("");
     try {
       await Api.seed();
-      setMsg("Sample data load ho gaya");
+      setMsg(t('settingsReseedDone'));
       setTimeout(() => setMsg(""), 2000);
-    } catch (e: any) { setMsg(e?.message || "Error"); } finally { setBusy(false); }
+    } catch (e: any) { setMsg(e?.message || t('error')); } finally { setBusy(false); }
   };
 
   const lock = async () => {
@@ -53,24 +56,29 @@ export default function SettingsTab() {
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <ScrollView contentContainerStyle={{ padding: Spacing.lg }}>
-        <Text style={styles.title}>Settings</Text>
+        <Text style={styles.title}>{t('settingsTitle')}</Text>
 
-        <Text style={styles.sectionLabel}>Dukaan ka naam</Text>
+        <Text style={styles.sectionLabel}>{t('language')}</Text>
+        <View style={styles.card}>
+          <LanguageToggle testID="settings-language-toggle" />
+        </View>
+
+        <Text style={styles.sectionLabel}>{t('settingsShopName')}</Text>
         <View style={styles.card}>
           {editing ? (
             <View style={{ gap: Spacing.md }}>
               <TextInput
                 testID="settings-shop-input"
                 value={shopName} onChangeText={setShopName}
-                style={styles.input} placeholder="Shop name"
+                style={styles.input} placeholder={t('settingsShopPlaceholder')}
                 placeholderTextColor={Colors.muted}
               />
               <View style={{ flexDirection: "row", gap: Spacing.sm }}>
                 <Pressable onPress={() => setEditing(false)} style={[styles.btn, styles.btnGhost]}>
-                  <Text style={styles.btnGhostText}>Cancel</Text>
+                  <Text style={styles.btnGhostText}>{t('cancel')}</Text>
                 </Pressable>
                 <Pressable testID="settings-save-shop" onPress={saveName} style={[styles.btn, styles.btnPrimary]} disabled={busy}>
-                  <Text style={styles.btnPrimaryText}>{busy ? "..." : "Save"}</Text>
+                  <Text style={styles.btnPrimaryText}>{busy ? "..." : t('save')}</Text>
                 </Pressable>
               </View>
             </View>
@@ -84,22 +92,22 @@ export default function SettingsTab() {
           )}
         </View>
 
-        <Text style={styles.sectionLabel}>Data</Text>
+        <Text style={styles.sectionLabel}>{t('settingsData')}</Text>
         <Pressable testID="settings-reseed" onPress={reseed} style={styles.actionRow} disabled={busy}>
           <Ionicons name="refresh" size={22} color={Colors.brand} />
           <View style={{ flex: 1 }}>
-            <Text style={styles.actionTitle}>Sample data reset</Text>
-            <Text style={styles.actionSub}>5 demo customers re-load karega</Text>
+            <Text style={styles.actionTitle}>{t('settingsReseedTitle')}</Text>
+            <Text style={styles.actionSub}>{t('settingsReseedSub')}</Text>
           </View>
           {busy ? <ActivityIndicator color={Colors.brand} /> : <Ionicons name="chevron-forward" size={18} color={Colors.muted} />}
         </Pressable>
 
-        <Text style={styles.sectionLabel}>Security</Text>
+        <Text style={styles.sectionLabel}>{t('settingsSecurity')}</Text>
         <Pressable testID="settings-lock" onPress={lock} style={styles.actionRow}>
           <Ionicons name="lock-closed" size={22} color={Colors.brand} />
           <View style={{ flex: 1 }}>
-            <Text style={styles.actionTitle}>App lock karein</Text>
-            <Text style={styles.actionSub}>PIN dobara maanga jaayega</Text>
+            <Text style={styles.actionTitle}>{t('settingsLockTitle')}</Text>
+            <Text style={styles.actionSub}>{t('settingsLockSub')}</Text>
           </View>
           <Ionicons name="chevron-forward" size={18} color={Colors.muted} />
         </Pressable>
@@ -107,15 +115,15 @@ export default function SettingsTab() {
         <Pressable testID="settings-logout" onPress={logout} style={styles.actionRow}>
           <Ionicons name="log-out" size={22} color={Colors.udhaar} />
           <View style={{ flex: 1 }}>
-            <Text style={styles.actionTitle}>Logout</Text>
-            <Text style={styles.actionSub}>Server login clear karega</Text>
+            <Text style={styles.actionTitle}>{t('settingsLogoutTitle')}</Text>
+            <Text style={styles.actionSub}>{t('settingsLogoutSub')}</Text>
           </View>
           <Ionicons name="chevron-forward" size={18} color={Colors.muted} />
         </Pressable>
 
         {!!msg && <Text style={styles.msg} testID="settings-msg">{msg}</Text>}
 
-        <Text style={styles.footer}>Kirana Udhaar Tracker · Made for Indian shops</Text>
+        <Text style={styles.footer}>{t('settingsFooter')}</Text>
       </ScrollView>
     </SafeAreaView>
   );

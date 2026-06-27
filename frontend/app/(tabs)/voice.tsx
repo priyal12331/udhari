@@ -9,10 +9,12 @@ import { AudioModule, useAudioRecorder, RecordingPresets } from "expo-audio";
 import * as Haptics from "expo-haptics";
 import Animated, { useAnimatedStyle, useSharedValue, withRepeat, withTiming, withSequence } from "react-native-reanimated";
 import { Api, VoiceParse } from "@/src/api";
+import { useLocale } from "@/src/i18n/LocaleContext";
 import { Colors, Font, Radius, Spacing } from "@/src/theme";
 
 export default function VoiceTab() {
   const router = useRouter();
+  const { t } = useLocale();
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const [recording, setRecording] = useState(false);
   const [processing, setProcessing] = useState(false);
@@ -45,12 +47,12 @@ export default function VoiceTab() {
   const start = async () => {
     setErr(""); setResult(null);
     if (Platform.OS === "web") {
-      setErr("Voice recording mobile par chalega. Web par neeche text se try karein.");
+      setErr(t('voiceWebHint'));
       return;
     }
     if (!permission) {
       const p = await AudioModule.requestRecordingPermissionsAsync();
-      if (!p.granted) { setErr("Microphone permission chahiye"); return; }
+      if (!p.granted) { setErr(t('voiceMicRequired')); return; }
       setPermission(true);
     }
     try {
@@ -69,7 +71,7 @@ export default function VoiceTab() {
       await recorder.stop();
       setRecording(false);
       const uri = recorder.uri;
-      if (!uri) { setErr("Audio capture failed"); return; }
+      if (!uri) { setErr(t('voiceCaptureFailed')); return; }
       setProcessing(true);
       const r = await Api.parseVoice(uri);
       setResult(r);
@@ -77,7 +79,7 @@ export default function VoiceTab() {
       if (r.amount && r.type) goConfirm(r);
     } catch (e: any) {
       setProcessing(false);
-      setErr(e?.message || "Could not transcribe");
+      setErr(e?.message || t('voiceTranscribeFailed'));
     }
   };
 
@@ -91,7 +93,7 @@ export default function VoiceTab() {
       setProcessing(false);
       if (r.amount && r.type) goConfirm(r);
     } catch (e: any) {
-      setProcessing(false); setErr(e?.message || "Parse failed");
+      setProcessing(false); setErr(e?.message || t('voiceParseFailed'));
     }
   };
 
@@ -113,8 +115,8 @@ export default function VoiceTab() {
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
-          <Text style={styles.title} testID="voice-title">Voice Entry</Text>
-      <Text style={styles.subtitle}>Bolein: {'"Ramesh 450 udhaar"'} ya {'"Suresh 200 payment"'}</Text>
+          <Text style={styles.title} testID="voice-title">{t('voiceTitle')}</Text>
+      <Text style={styles.subtitle}>{t('voiceSubtitle')}</Text>
 
           <View style={styles.center}>
             <Animated.View style={[styles.micRing, recording && styles.micRingActive, pulseStyle]}>
@@ -132,12 +134,12 @@ export default function VoiceTab() {
               </Pressable>
             </Animated.View>
             <Text style={styles.status} testID="voice-status">
-              {processing ? "Process kar rahe..." : recording ? "Sun rahe hain..." : "Tap karein"}
+              {processing ? t('voiceProcessing') : recording ? t('voiceListening') : t('voiceTap')}
             </Text>
             {!!err && <Text style={styles.err} testID="voice-error">{err}</Text>}
             {!!result?.transcript && (
               <View style={styles.transcriptBox} testID="voice-transcript-box">
-                <Text style={styles.transcriptLabel}>Aapne kaha:</Text>
+                <Text style={styles.transcriptLabel}>{t('voiceYouSaid')}</Text>
                 <Text style={styles.transcriptText}>"{result.transcript}"</Text>
                 {result.amount && result.type && (
                   <Text style={styles.parsedHint}>
@@ -146,7 +148,7 @@ export default function VoiceTab() {
                 )}
                 {(!result.amount || !result.type) && (
                   <Text style={[styles.parsedHint, { color: Colors.udhaar }]}>
-                    Naam ya amount samjh nahi aaya — phir try karein
+                    {t('voiceParseError')}
                   </Text>
                 )}
               </View>
@@ -154,13 +156,13 @@ export default function VoiceTab() {
           </View>
 
           <View style={styles.manualBox}>
-            <Text style={styles.manualLabel}>Ya likhein (web/test mein):</Text>
+            <Text style={styles.manualLabel}>{t('voiceManualLabel')}</Text>
             <View style={styles.manualRow}>
               <TextInput
                 testID="voice-manual-input"
                 value={manualText}
                 onChangeText={setManualText}
-                placeholder={'e.g. "Ramesh 450 udhaar"'}
+                placeholder={t('voiceManualPlaceholder')}
                 placeholderTextColor={Colors.muted}
                 style={styles.manualInput}
               />

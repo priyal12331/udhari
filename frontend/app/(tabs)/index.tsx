@@ -8,9 +8,11 @@ import { Ionicons } from "@expo/vector-icons";
 import { Api, Dashboard } from "@/src/api";
 import { Colors, Font, formatINR, Radius, Spacing } from "@/src/theme";
 import { CustomerRow } from "@/src/components/CustomerRow";
+import { useLocale } from "@/src/i18n/LocaleContext";
 
 export default function HomeTab() {
   const router = useRouter();
+  const { t } = useLocale();
   const [data, setData] = useState<Dashboard | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -35,7 +37,7 @@ export default function HomeTab() {
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <View style={styles.header}>
         <View>
-          <Text style={styles.greeting}>Namaste 🙏</Text>
+          <Text style={styles.greeting}>{t('homeGreeting')}</Text>
           <Text style={styles.shop} numberOfLines={1} testID="home-shop-name">{shopName}</Text>
         </View>
         <Pressable
@@ -56,25 +58,25 @@ export default function HomeTab() {
           ListHeaderComponent={
             <View style={styles.heroWrap}>
               <View style={styles.hero} testID="home-hero-card">
-                <Text style={styles.heroLabel}>Total Udhaar (Outstanding)</Text>
+                <Text style={styles.heroLabel}>{t('homeOutstanding')}</Text>
                 <Text style={styles.heroAmount} testID="home-total-outstanding">
                   {formatINR(data?.total_outstanding || 0)}
                 </Text>
                 <View style={styles.heroStatsRow}>
                   <View style={styles.heroStat}>
                     <Text style={styles.heroStatNum}>{data?.total_customers || 0}</Text>
-                    <Text style={styles.heroStatLabel}>Customers</Text>
+                    <Text style={styles.heroStatLabel}>{t('homeCustomers')}</Text>
                   </View>
                   <View style={styles.heroDivider} />
                   <View style={styles.heroStat}>
                     <Text style={[styles.heroStatNum, { color: Colors.udhaar }]}>
                       {data?.customers_with_dues || 0}
                     </Text>
-                    <Text style={styles.heroStatLabel}>Dues pending</Text>
+                    <Text style={styles.heroStatLabel}>{t('homeDuesPending')}</Text>
                   </View>
                 </View>
               </View>
-              <Text style={styles.sectionTitle}>Saare customers</Text>
+              <Text style={styles.sectionTitle}>{t('homeAllCustomers')}</Text>
             </View>
           }
           renderItem={({ item }) => (
@@ -83,14 +85,14 @@ export default function HomeTab() {
           ListEmptyComponent={
             <View style={styles.empty} testID="home-empty">
               <Ionicons name="storefront-outline" size={56} color={Colors.borderStrong} />
-              <Text style={styles.emptyTitle}>Koi customer nahi</Text>
-              <Text style={styles.emptySub}>Pehla customer add karein</Text>
+              <Text style={styles.emptyTitle}>{t('homeNoCustomers')}</Text>
+              <Text style={styles.emptySub}>{t('homeAddFirst')}</Text>
               <Pressable
                 onPress={() => router.push("/add-customer")}
                 style={styles.emptyBtn}
                 testID="home-empty-add"
               >
-                <Text style={styles.emptyBtnText}>+ Add Customer</Text>
+                <Text style={styles.emptyBtnText}>{t('homeAddCustomer')}</Text>
               </Pressable>
             </View>
           }
@@ -107,7 +109,7 @@ export default function HomeTab() {
         style={({ pressed }) => [styles.fab, pressed && { opacity: 0.85 }]}
       >
         <Ionicons name="mic" size={26} color="#fff" />
-        <Text style={styles.fabText}>Voice Add</Text>
+        <Text style={styles.fabText}>{t('homeVoiceAdd')}</Text>
       </Pressable>
     </SafeAreaView>
   );

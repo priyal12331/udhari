@@ -6,10 +6,12 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { Api, Customer } from "@/src/api";
+import { useLocale } from "@/src/i18n/LocaleContext";
 import { Colors, Font, Radius, Spacing } from "@/src/theme";
 
 export default function AddTransaction() {
   const router = useRouter();
+  const { t } = useLocale();
   const params = useLocalSearchParams<{
     customer_id?: string;
     initial_type?: string;
@@ -34,14 +36,14 @@ export default function AddTransaction() {
 
   const save = async () => {
     setErr("");
-    if (!customerId) return setErr("Customer choose karein");
+    if (!customerId) return setErr(t('addTxCustomerRequired'));
     const num = parseFloat(amount);
-    if (!num || num <= 0) return setErr("Sahi amount likhein");
+    if (!num || num <= 0) return setErr(t('addTxAmountInvalid'));
     setBusy(true);
     try {
       const tx = await Api.addTx(customerId, { type, amount: num, note });
       router.replace({ pathname: `/customer/${customerId}`, params: { notify_tx: tx.id } });
-    } catch (e: any) { setErr(e?.message || "Error"); } finally { setBusy(false); }
+    } catch (e: any) { setErr(e?.message || t('error')); } finally { setBusy(false); }
   };
 
   const isCredit = type === "credit";
@@ -53,20 +55,19 @@ export default function AddTransaction() {
           <Pressable onPress={() => router.back()} hitSlop={10} testID="addtx-close">
             <Ionicons name="close" size={26} color={Colors.onSurface} />
           </Pressable>
-          <Text style={styles.title}>Naya Entry</Text>
+          <Text style={styles.title}>{t('addTxTitle')}</Text>
           <View style={{ width: 26 }} />
         </View>
 
         <View style={styles.body}>
-          {/* Customer picker */}
           <Pressable
             testID="addtx-customer-picker"
             onPress={() => setShowPicker(v => !v)}
             style={styles.pickerBox}
           >
             <View>
-              <Text style={styles.pickerLabel}>Customer</Text>
-              <Text style={styles.pickerValue}>{selected?.name || "Choose karein"}</Text>
+              <Text style={styles.pickerLabel}>{t('addTxCustomer')}</Text>
+              <Text style={styles.pickerValue}>{selected?.name || t('addTxChoose')}</Text>
             </View>
             <Ionicons name={showPicker ? "chevron-up" : "chevron-down"} size={20} color={Colors.onSurface} />
           </Pressable>
@@ -89,27 +90,26 @@ export default function AddTransaction() {
             </View>
           )}
 
-          {/* Segmented control */}
           <View style={styles.seg}>
             <Pressable
               testID="addtx-type-credit"
               onPress={() => setType("credit")}
               style={[styles.segBtn, isCredit && { backgroundColor: Colors.udhaar }]}
             >
-              <Text style={[styles.segText, isCredit && { color: "#fff" }]}>Udhaar diya</Text>
-              <Text style={[styles.segSub, isCredit && { color: "rgba(255,255,255,0.85)" }]}>Credit</Text>
+              <Text style={[styles.segText, isCredit && { color: "#fff" }]}>{t('addTxCredit')}</Text>
+              <Text style={[styles.segSub, isCredit && { color: "rgba(255,255,255,0.85)" }]}>{t('addTxCreditSub')}</Text>
             </Pressable>
             <Pressable
               testID="addtx-type-payment"
               onPress={() => setType("payment")}
               style={[styles.segBtn, !isCredit && { backgroundColor: Colors.jama }]}
             >
-              <Text style={[styles.segText, !isCredit && { color: "#fff" }]}>Payment mila</Text>
-              <Text style={[styles.segSub, !isCredit && { color: "rgba(255,255,255,0.85)" }]}>Jama</Text>
+              <Text style={[styles.segText, !isCredit && { color: "#fff" }]}>{t('addTxPayment')}</Text>
+              <Text style={[styles.segSub, !isCredit && { color: "rgba(255,255,255,0.85)" }]}>{t('addTxPaymentSub')}</Text>
             </Pressable>
           </View>
 
-          <Text style={styles.label}>Amount (₹)</Text>
+          <Text style={styles.label}>{t('addTxAmount')}</Text>
           <TextInput
             testID="addtx-amount"
             value={amount} onChangeText={(v) => setAmount(v.replace(/[^0-9.]/g, ""))}
@@ -120,11 +120,11 @@ export default function AddTransaction() {
             autoFocus
           />
 
-          <Text style={styles.label}>Note (optional)</Text>
+          <Text style={styles.label}>{t('addTxNote')}</Text>
           <TextInput
             testID="addtx-note"
             value={note} onChangeText={setNote}
-            placeholder="e.g. doodh, biscuit"
+            placeholder={t('addTxNotePlaceholder')}
             placeholderTextColor={Colors.muted}
             style={styles.noteInput}
             multiline
@@ -139,7 +139,9 @@ export default function AddTransaction() {
             onPress={save} disabled={busy}
             style={[styles.btn, { backgroundColor: isCredit ? Colors.udhaar : Colors.jama }, busy && { opacity: 0.6 }]}
           >
-            <Text style={styles.btnText}>{busy ? "Save..." : `Save ${isCredit ? "Udhaar" : "Payment"}`}</Text>
+            <Text style={styles.btnText}>
+              {busy ? t('addTxSaving') : (isCredit ? t('addTxSaveCredit') : t('addTxSavePayment'))}
+            </Text>
           </Pressable>
         </View>
       </KeyboardAvoidingView>

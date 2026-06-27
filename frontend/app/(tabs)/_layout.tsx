@@ -2,10 +2,14 @@ import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { Colors, Font } from "@/src/theme";
 import { Platform } from "react-native";
+import { useLocale } from "@/src/i18n/LocaleContext";
 
 export default function TabsLayout() {
+  const { t, locale } = useLocale();
+
   return (
     <Tabs
+      key={locale}
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: Colors.brand,
@@ -22,7 +26,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: "Home",
+          title: t('tabHome'),
           tabBarIcon: ({ color, size }) => <Ionicons name="home" size={size} color={color} />,
           tabBarButtonTestID: "tab-home",
         }}
@@ -30,7 +34,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="customers"
         options={{
-          title: "Customers",
+          title: t('tabCustomers'),
           tabBarIcon: ({ color, size }) => <Ionicons name="people" size={size} color={color} />,
           tabBarButtonTestID: "tab-customers",
         }}
@@ -38,7 +42,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="voice"
         options={{
-          title: "Voice",
+          title: t('tabVoice'),
           tabBarIcon: ({ color, size }) => <Ionicons name="mic" size={size} color={color} />,
           tabBarButtonTestID: "tab-voice",
         }}
@@ -46,7 +50,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="settings"
         options={{
-          title: "Settings",
+          title: t('tabSettings'),
           tabBarIcon: ({ color, size }) => <Ionicons name="settings" size={size} color={color} />,
           tabBarButtonTestID: "tab-settings",
         }}

@@ -7,10 +7,13 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { Api } from "@/src/api";
 import { Session } from "@/src/session";
+import { LanguageToggle } from "@/src/components/LanguageToggle";
+import { useLocale } from "@/src/i18n/LocaleContext";
 import { Colors, Font, Radius, Spacing } from "@/src/theme";
 
 export default function SetupScreen() {
   const router = useRouter();
+  const { t } = useLocale();
   const [shopName, setShopName] = useState("");
   const [pin, setPin] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -20,9 +23,9 @@ export default function SetupScreen() {
 
   const onSave = async () => {
     setErr("");
-    if (!shopName.trim()) return setErr("Dukaan ka naam likhein");
-    if (pin.length < 4) return setErr("PIN kam se kam 4 digit ka ho");
-    if (pin !== confirm) return setErr("PIN match nahi ho raha");
+    if (!shopName.trim()) return setErr(t('setupShopRequired'));
+    if (pin.length < 4) return setErr(t('setupPinShort'));
+    if (pin !== confirm) return setErr(t('setupPinMismatch'));
     try {
       setBusy(true);
       await Api.postSetup(shopName.trim(), pin);
@@ -32,7 +35,7 @@ export default function SetupScreen() {
       await Session.unlock();
       router.replace("/(tabs)");
     } catch (e: any) {
-      setErr(e?.message || "Error");
+      setErr(e?.message || t('error'));
     } finally {
       setBusy(false);
     }
@@ -42,25 +45,26 @@ export default function SetupScreen() {
     <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+          <LanguageToggle compact testID="setup-language-toggle" />
           <View style={styles.iconWrap}>
             <Ionicons name="storefront" size={36} color={Colors.brand} />
           </View>
-          <Text style={styles.title} testID="setup-title">Dukaan setup karein</Text>
-          <Text style={styles.subtitle}>Apni dukaan ka naam aur ek PIN choose karein</Text>
+          <Text style={styles.title} testID="setup-title">{t('setupTitle')}</Text>
+          <Text style={styles.subtitle}>{t('setupSubtitle')}</Text>
 
-          <Text style={styles.label}>Dukaan ka naam · Shop name</Text>
+          <Text style={styles.label}>{t('setupShopName')}</Text>
           <TextInput
             testID="setup-shop-input"
             value={shopName}
             onChangeText={setShopName}
-            placeholder="e.g. Sharma Kirana Store"
+            placeholder={t('setupShopPlaceholder')}
             placeholderTextColor={Colors.muted}
             style={styles.input}
             autoCapitalize="words"
             returnKeyType="next"
           />
 
-          <Text style={styles.label}>4-digit PIN</Text>
+          <Text style={styles.label}>{t('setupPin')}</Text>
           <TextInput
             testID="setup-pin-input"
             value={pin}
@@ -72,7 +76,7 @@ export default function SetupScreen() {
             secureTextEntry
           />
 
-          <Text style={styles.label}>PIN dobara · Confirm</Text>
+          <Text style={styles.label}>{t('setupPinConfirm')}</Text>
           <TextInput
             testID="setup-pin-confirm"
             value={confirm}
@@ -93,8 +97,8 @@ export default function SetupScreen() {
               {seedDemo && <Ionicons name="checkmark" size={16} color="#fff" />}
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.checkboxTitle}>Sample data load karein</Text>
-              <Text style={styles.checkboxSub}>5 demo customers + transactions</Text>
+              <Text style={styles.checkboxTitle}>{t('setupSeedTitle')}</Text>
+              <Text style={styles.checkboxSub}>{t('setupSeedSub')}</Text>
             </View>
           </Pressable>
 
@@ -107,7 +111,7 @@ export default function SetupScreen() {
             disabled={busy}
             style={({ pressed }) => [styles.primaryBtn, pressed && { opacity: 0.85 }, busy && { opacity: 0.6 }]}
           >
-            <Text style={styles.primaryBtnText}>{busy ? "Save kar rahe..." : "Shuru karein"}</Text>
+            <Text style={styles.primaryBtnText}>{busy ? t('setupBusy') : t('setupStart')}</Text>
           </Pressable>
         </View>
       </KeyboardAvoidingView>
@@ -121,7 +125,7 @@ const styles = StyleSheet.create({
   iconWrap: {
     width: 64, height: 64, borderRadius: Radius.lg,
     backgroundColor: Colors.surfaceSecondary, alignItems: "center", justifyContent: "center",
-    marginBottom: Spacing.lg,
+    marginBottom: Spacing.lg, marginTop: Spacing.lg,
   },
   title: { fontSize: Font.size.xxl + 4, fontWeight: Font.weight.black, color: Colors.onSurface },
   subtitle: { fontSize: Font.size.lg, color: Colors.muted, marginTop: Spacing.xs, marginBottom: Spacing.xl },

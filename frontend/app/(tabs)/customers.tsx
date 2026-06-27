@@ -6,11 +6,13 @@ import { Ionicons } from "@expo/vector-icons";
 import { Api, Customer } from "@/src/api";
 import { Colors, Font, Radius, Spacing } from "@/src/theme";
 import { CustomerRow } from "@/src/components/CustomerRow";
+import { useLocale } from "@/src/i18n/LocaleContext";
 
 type Filter = "all" | "pending" | "cleared" | "risky";
 
 export default function CustomersTab() {
   const router = useRouter();
+  const { t } = useLocale();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -39,23 +41,23 @@ export default function CustomersTab() {
   }, [customers, q, filter]);
 
   const chips: { id: Filter; label: string }[] = [
-    { id: "all", label: "Sab" },
-    { id: "pending", label: "Pending" },
-    { id: "risky", label: "Risky" },
-    { id: "cleared", label: "Cleared" },
+    { id: "all", label: t('customersChipAll') },
+    { id: "pending", label: t('customersChipPending') },
+    { id: "risky", label: t('customersChipRisky') },
+    { id: "cleared", label: t('customersChipCleared') },
   ];
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <View style={styles.header}>
-        <Text style={styles.title} testID="customers-title">Customers</Text>
+        <Text style={styles.title} testID="customers-title">{t('tabCustomers')}</Text>
         <Pressable
           onPress={() => router.push("/add-customer")}
           testID="customers-add-btn"
           style={({ pressed }) => [styles.addBtn, pressed && { opacity: 0.8 }]}
         >
           <Ionicons name="add" size={20} color="#fff" />
-          <Text style={styles.addBtnText}>Add</Text>
+          <Text style={styles.addBtnText}>{t('add')}</Text>
         </Pressable>
       </View>
       <View style={styles.searchWrap}>
@@ -64,7 +66,7 @@ export default function CustomersTab() {
           testID="customers-search"
           value={q}
           onChangeText={setQ}
-          placeholder="Naam ya phone search karein"
+          placeholder={t('customersSearch')}
           placeholderTextColor={Colors.muted}
           style={styles.search}
         />
@@ -103,7 +105,7 @@ export default function CustomersTab() {
           ListEmptyComponent={
             <View style={styles.empty}>
               <Ionicons name="people-outline" size={48} color={Colors.borderStrong} />
-              <Text style={styles.emptyText}>Koi customer match nahi</Text>
+              <Text style={styles.emptyText}>{t('customersNoMatch')}</Text>
             </View>
           }
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} />}
