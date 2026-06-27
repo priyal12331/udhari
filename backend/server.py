@@ -252,13 +252,13 @@ async def create_customer(payload: CustomerCreate):
 
 @api_router.get("/customers", response_model=List[CustomerOut])
 async def list_customers():
-    customers = await db.customers.find({}, {"_id": 0}).sort("created_at", -1).to_list(10000)
+    customers = await db.customers.find({}, {"_id": 0}).sort("created_at", -1).limit(500).to_list(500)
     cust_ids = [c["id"] for c in customers]
     # Single batched query for all transactions belonging to these customers
     all_txs = await db.transactions.find(
         {"customer_id": {"$in": cust_ids}},
         {"_id": 0, "customer_id": 1, "type": 1, "amount": 1, "date": 1},
-    ).to_list(100000)
+    ).limit(5000).to_list(5000)
     grouped: dict[str, list] = {}
     for t in all_txs:
         grouped.setdefault(t["customer_id"], []).append(t)
@@ -273,7 +273,7 @@ async def get_customer(customer_id: str):
     txs = await db.transactions.find(
         {"customer_id": customer_id},
         {"_id": 0, "type": 1, "amount": 1, "date": 1},
-    ).to_list(10000)
+    ).limit(1000).to_list(1000)
     return _compute_view_from_txs(c, txs)
 
 
@@ -306,7 +306,10 @@ async def add_transaction(customer_id: str, payload: TransactionCreate):
     await db.transactions.insert_one({**tx})
 
     # compute running balance up to & including this tx
-    txs = await db.transactions.find({"customer_id": customer_id}, {"_id": 0}).to_list(10000)
+    txs = await db.transactions.find(
+        {"customer_id": customer_id},
+        {"_id": 0, "id": 1, "type": 1, "amount": 1, "date": 1},
+    ).limit(1000).to_list(1000)
     txs_sorted = sorted(txs, key=lambda x: x["date"])
     bal = 0.0
     running = 0.0
@@ -323,7 +326,10 @@ async def add_transaction(customer_id: str, payload: TransactionCreate):
 
 @api_router.get("/customers/{customer_id}/transactions", response_model=List[TransactionOut])
 async def list_transactions(customer_id: str):
-    txs = await db.transactions.find({"customer_id": customer_id}, {"_id": 0}).to_list(10000)
+    txs = await db.transactions.find(
+        {"customer_id": customer_id},
+        {"_id": 0, "id": 1, "customer_id": 1, "type": 1, "amount": 1, "date": 1, "note": 1, "created_at": 1},
+    ).limit(1000).to_list(1000)
     # Sort by date asc to compute running balance, then return desc
     txs_sorted = sorted(txs, key=lambda x: x["date"])
     bal = 0.0
@@ -347,12 +353,12 @@ async def delete_tx(tx_id: str):
 # ---------- Dashboard ----------
 @api_router.get("/dashboard", response_model=DashboardOut)
 async def dashboard():
-    customers = await db.customers.find({}, {"_id": 0}).sort("created_at", -1).to_list(10000)
+    customers = await db.customers.find({}, {"_id": 0}).sort("created_at", -1).limit(500).to_list(500)
     cust_ids = [c["id"] for c in customers]
     all_txs = await db.transactions.find(
         {"customer_id": {"$in": cust_ids}},
         {"_id": 0, "customer_id": 1, "type": 1, "amount": 1, "date": 1},
-    ).to_list(100000)
+    ).limit(5000).to_list(5000)
     grouped: dict[str, list] = {}
     for t in all_txs:
         grouped.setdefault(t["customer_id"], []).append(t)
@@ -440,7 +446,9 @@ async def voice_parse(file: UploadFile = File(...)):
         except Exception:
             pass
 
-    customers = await db.customers.find({}, {"_id": 0}).to_list(10000)
+    customers = await db.customers.find(
+        {}, {"_id": 0, "id": 1, "name": 1},
+    ).limit(500).to_list(500)
 
     # LLM parse
     parsed = {}
@@ -505,7 +513,9 @@ class VoiceTextIn(BaseModel):
 
 @api_router.post("/voice/parse-text", response_model=VoiceParseOut)
 async def voice_parse_text(payload: VoiceTextIn):
-    customers = await db.customers.find({}, {"_id": 0}).to_list(10000)
+    customers = await db.customers.find(
+        {}, {"_id": 0, "id": 1, "name": 1},
+    ).limit(500).to_list(500)
     parsed = _parse_command_locally(payload.text, customers)
     return VoiceParseOut(
         transcript=payload.text,
