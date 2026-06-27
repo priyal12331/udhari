@@ -97,6 +97,7 @@ class TransactionOut(BaseModel):
     note: str
     running_balance: float
     created_at: str
+    notified_at: Optional[str] = None
 
 
 class DashboardOut(BaseModel):
@@ -321,6 +322,7 @@ async def add_transaction(customer_id: str, payload: TransactionCreate):
         id=tx["id"], customer_id=tx["customer_id"], type=tx["type"],
         amount=tx["amount"], date=tx["date"], note=tx["note"],
         running_balance=round(running, 2), created_at=tx["created_at"],
+        notified_at=None,
     )
 
 
@@ -328,7 +330,7 @@ async def add_transaction(customer_id: str, payload: TransactionCreate):
 async def list_transactions(customer_id: str):
     txs = await db.transactions.find(
         {"customer_id": customer_id},
-        {"_id": 0, "id": 1, "customer_id": 1, "type": 1, "amount": 1, "date": 1, "note": 1, "created_at": 1},
+        {"_id": 0, "id": 1, "customer_id": 1, "type": 1, "amount": 1, "date": 1, "note": 1, "created_at": 1, "notified_at": 1},
     ).limit(1000).to_list(1000)
     # Sort by date asc to compute running balance, then return desc
     txs_sorted = sorted(txs, key=lambda x: x["date"])
@@ -340,8 +342,26 @@ async def list_transactions(customer_id: str):
             id=t["id"], customer_id=t["customer_id"], type=t["type"],
             amount=float(t["amount"]), date=t["date"], note=t.get("note", ""),
             running_balance=round(bal, 2), created_at=t.get("created_at", t["date"]),
+            notified_at=t.get("notified_at"),
         ))
     return list(reversed(enriched))
+
+
+class NotifyOut(BaseModel):
+    id: str
+    notified_at: str
+
+
+@api_router.post("/transactions/{tx_id}/notify", response_model=NotifyOut)
+async def mark_notified(tx_id: str):
+    ts = iso(now_utc())
+    res = await db.transactions.update_one(
+        {"id": tx_id},
+        {"$set": {"notified_at": ts}},
+    )
+    if res.matched_count == 0:
+        raise HTTPException(404, "Transaction not found")
+    return NotifyOut(id=tx_id, notified_at=ts)
 
 
 @api_router.delete("/transactions/{tx_id}")

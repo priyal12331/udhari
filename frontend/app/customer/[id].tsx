@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useState, useMemo } from "react";
 import {
   View, Text, StyleSheet, FlatList, Pressable, Linking, ActivityIndicator, Platform,
 } from "react-native";
@@ -9,13 +9,23 @@ import * as Haptics from "expo-haptics";
 import { Api, Customer, Transaction } from "@/src/api";
 import { Colors, Font, formatINR, Radius, Spacing } from "@/src/theme";
 
+function fmtDate(d: Date, withTime = false): string {
+  const opts: Intl.DateTimeFormatOptions = { day: "2-digit", month: "short", year: "numeric" };
+  if (withTime) {
+    return d.toLocaleString("en-IN", { ...opts, hour: "2-digit", minute: "2-digit" });
+  }
+  return d.toLocaleDateString("en-IN", opts);
+}
+
 export default function CustomerDetail() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, notify_tx } = useLocalSearchParams<{ id: string; notify_tx?: string }>();
   const router = useRouter();
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [txs, setTxs] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [shopName, setShopName] = useState("");
+  const [dismissedBanner, setDismissedBanner] = useState(false);
+  const [sendingId, setSendingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -27,21 +37,59 @@ export default function CustomerDetail() {
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
-  const openWhatsApp = async () => {
+  const justAddedTx = useMemo(
+    () => txs.find((t) => t.id === notify_tx && !t.notified_at),
+    [txs, notify_tx]
+  );
+
+  const buildReminderMessage = (cust: Customer): string => {
+    const amount = Math.max(0, Math.round(cust.balance));
+    return `Namaste ${cust.name}, aapka ₹${amount} udhaar pending hai. - ${shopName || "Aapki Dukaan"}`;
+  };
+
+  const buildReceiptMessage = (cust: Customer, tx: Transaction): string => {
+    const amount = Math.round(tx.amount);
+    const dstr = fmtDate(new Date(tx.date));
+    const sn = shopName || "Aapki Dukaan";
+    if (tx.type === "credit") {
+      return `Namaste! Aapne aaj ${sn} se ₹${amount} udhaar liya hai ${dstr} ko. Yeh aapki receipt hai. - ${sn}`;
+    }
+    return `Namaste ${cust.name}, aapka ₹${amount} payment ${sn} ne ${dstr} ko receive kar liya hai. Dhanyavaad! - ${sn}`;
+  };
+
+  const openWhatsAppWith = async (phone: string, message: string): Promise<boolean> => {
+    const clean = phone.replace(/[^0-9]/g, "");
+    const url = `whatsapp://send?phone=${clean}&text=${encodeURIComponent(message)}`;
+    const webUrl = `https://wa.me/${clean}?text=${encodeURIComponent(message)}`;
+    try {
+      if (Platform.OS !== "web") {
+        const supported = await Linking.canOpenURL(url);
+        if (supported) { await Linking.openURL(url); return true; }
+      }
+      await Linking.openURL(webUrl);
+      return true;
+    } catch { return false; }
+  };
+
+  const sendReminder = async () => {
     if (!customer) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-    const amount = Math.max(0, Math.round(customer.balance));
-    const msg = `Namaste ${customer.name}, aapka ₹${amount} udhaar pending hai. - ${shopName || "Aapki Dukaan"}`;
-    const phone = customer.phone.replace(/[^0-9]/g, "");
-    const url = `whatsapp://send?phone=${phone}&text=${encodeURIComponent(msg)}`;
-    const webUrl = `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
-    try {
-      const supported = await Linking.canOpenURL(url);
-      if (supported) await Linking.openURL(url);
-      else await Linking.openURL(webUrl);
-    } catch {
-      await Linking.openURL(webUrl);
+    await openWhatsAppWith(customer.phone, buildReminderMessage(customer));
+  };
+
+  const sendReceipt = async (tx: Transaction) => {
+    if (!customer) return;
+    setSendingId(tx.id);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    const ok = await openWhatsAppWith(customer.phone, buildReceiptMessage(customer, tx));
+    if (ok) {
+      try {
+        const r = await Api.notifyTx(tx.id);
+        setTxs((prev) => prev.map((t) => t.id === tx.id ? { ...t, notified_at: r.notified_at } : t));
+        if (notify_tx === tx.id) setDismissedBanner(true);
+      } catch {}
     }
+    setSendingId(null);
   };
 
   const removeCustomer = async () => {
@@ -59,6 +107,7 @@ export default function CustomerDetail() {
   }
 
   const owes = customer.balance > 0;
+  const showBanner = !!justAddedTx && !dismissedBanner;
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
@@ -92,12 +141,51 @@ export default function CustomerDetail() {
       <FlatList
         data={txs}
         keyExtractor={(t) => t.id}
-        ListHeaderComponent={<Text style={styles.section}>Transaction History</Text>}
+        ListHeaderComponent={
+          <View>
+            {showBanner && justAddedTx && (
+              <View style={styles.banner} testID="receipt-banner">
+                <View style={styles.bannerIcon}>
+                  <Ionicons name="logo-whatsapp" size={22} color="#25D366" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.bannerTitle}>Receipt WhatsApp pe bhejein?</Text>
+                  <Text style={styles.bannerSub} numberOfLines={2}>
+                    {justAddedTx.type === "credit" ? "Customer ko ₹" + Math.round(justAddedTx.amount) + " udhaar ka digital proof bhej dein" : "Payment ki rasid customer ko bhej dein"}
+                  </Text>
+                </View>
+                <View style={styles.bannerActions}>
+                  <Pressable
+                    testID="receipt-banner-send"
+                    onPress={() => sendReceipt(justAddedTx)}
+                    disabled={sendingId === justAddedTx.id}
+                    style={[styles.bannerSendBtn, sendingId === justAddedTx.id && { opacity: 0.6 }]}
+                  >
+                    {sendingId === justAddedTx.id ? (
+                      <ActivityIndicator color="#fff" size="small" />
+                    ) : (
+                      <Text style={styles.bannerSendText}>Bhejo</Text>
+                    )}
+                  </Pressable>
+                  <Pressable
+                    testID="receipt-banner-skip"
+                    hitSlop={10}
+                    onPress={() => setDismissedBanner(true)}
+                  >
+                    <Ionicons name="close" size={20} color={Colors.muted} />
+                  </Pressable>
+                </View>
+              </View>
+            )}
+            <Text style={styles.section}>Transaction History</Text>
+          </View>
+        }
         renderItem={({ item }) => {
           const isCredit = item.type === "credit";
           const color = isCredit ? Colors.udhaar : Colors.jama;
           const date = new Date(item.date);
-          const dstr = date.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+          const dstr = fmtDate(date);
+          const notified = !!item.notified_at;
           return (
             <View style={styles.txRow} testID={`tx-${item.id}`}>
               <View style={[styles.txIcon, { backgroundColor: color + "1A" }]}>
@@ -106,12 +194,35 @@ export default function CustomerDetail() {
               <View style={{ flex: 1 }}>
                 <Text style={styles.txTitle}>{isCredit ? "Udhaar diya" : "Payment mila"}</Text>
                 {!!item.note && <Text style={styles.txNote} numberOfLines={1}>{item.note}</Text>}
-                <Text style={styles.txDate}>{dstr}</Text>
+                <View style={styles.txMetaRow}>
+                  <Text style={styles.txDate}>{dstr}</Text>
+                  {notified && (
+                    <View style={styles.notifiedPill} testID={`tx-notified-${item.id}`}>
+                      <Ionicons name="checkmark-circle" size={11} color="#25D366" />
+                      <Text style={styles.notifiedText}>
+                        Sent {fmtDate(new Date(item.notified_at!))}
+                      </Text>
+                    </View>
+                  )}
+                </View>
               </View>
-              <View style={{ alignItems: "flex-end" }}>
+              <View style={{ alignItems: "flex-end", gap: 4 }}>
                 <Text style={[styles.txAmount, { color }]}>{isCredit ? "+" : "-"}{formatINR(item.amount)}</Text>
                 <Text style={styles.txRunning}>Bal {formatINR(item.running_balance)}</Text>
               </View>
+              <Pressable
+                testID={`tx-send-receipt-${item.id}`}
+                disabled={sendingId === item.id}
+                onPress={() => sendReceipt(item)}
+                hitSlop={6}
+                style={[styles.txWaBtn, notified && styles.txWaBtnSent]}
+              >
+                {sendingId === item.id ? (
+                  <ActivityIndicator color={notified ? "#25D366" : "#fff"} size="small" />
+                ) : (
+                  <Ionicons name="logo-whatsapp" size={18} color={notified ? "#25D366" : "#fff"} />
+                )}
+              </Pressable>
             </View>
           );
         }}
@@ -127,7 +238,7 @@ export default function CustomerDetail() {
       <View style={styles.bottomBar}>
         <Pressable
           testID="detail-whatsapp"
-          onPress={openWhatsApp}
+          onPress={sendReminder}
           disabled={!owes}
           style={[styles.waBtn, !owes && { opacity: 0.4 }]}
         >
@@ -162,14 +273,41 @@ const styles = StyleSheet.create({
   phoneText: { fontSize: Font.size.base, color: Colors.onSurfaceSecondary, fontWeight: Font.weight.semibold },
   riskPill: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: Radius.pill, marginLeft: 8 },
   riskPillText: { color: "#fff", fontSize: 11, fontWeight: Font.weight.bold },
+  banner: {
+    flexDirection: "row", alignItems: "center", gap: Spacing.md,
+    marginHorizontal: Spacing.lg, marginBottom: Spacing.md, padding: Spacing.md,
+    backgroundColor: "rgba(37, 211, 102, 0.08)", borderRadius: Radius.md,
+    borderWidth: 1, borderColor: "rgba(37, 211, 102, 0.25)",
+  },
+  bannerIcon: {
+    width: 40, height: 40, borderRadius: 20, backgroundColor: "#fff",
+    alignItems: "center", justifyContent: "center",
+  },
+  bannerTitle: { fontSize: Font.size.base, fontWeight: Font.weight.bold, color: Colors.onSurface },
+  bannerSub: { fontSize: Font.size.sm, color: Colors.onSurfaceSecondary, marginTop: 2 },
+  bannerActions: { flexDirection: "row", alignItems: "center", gap: Spacing.sm },
+  bannerSendBtn: { backgroundColor: "#25D366", borderRadius: Radius.pill, paddingHorizontal: Spacing.lg, paddingVertical: 8, minWidth: 64, alignItems: "center" },
+  bannerSendText: { color: "#fff", fontWeight: Font.weight.bold, fontSize: Font.size.base },
   section: { fontSize: Font.size.lg, fontWeight: Font.weight.bold, color: Colors.onSurface, paddingHorizontal: Spacing.lg, marginBottom: Spacing.sm },
   txRow: { flexDirection: "row", alignItems: "center", gap: Spacing.md, paddingHorizontal: Spacing.lg, paddingVertical: Spacing.md, borderBottomWidth: 1, borderBottomColor: Colors.divider },
   txIcon: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
   txTitle: { fontSize: Font.size.base, fontWeight: Font.weight.bold, color: Colors.onSurface },
   txNote: { fontSize: Font.size.sm, color: Colors.onSurfaceSecondary, marginTop: 2 },
-  txDate: { fontSize: 11, color: Colors.muted, marginTop: 2 },
+  txMetaRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4, flexWrap: "wrap" },
+  txDate: { fontSize: 11, color: Colors.muted },
+  notifiedPill: {
+    flexDirection: "row", alignItems: "center", gap: 3,
+    backgroundColor: "rgba(37, 211, 102, 0.12)",
+    paddingHorizontal: 6, paddingVertical: 2, borderRadius: Radius.pill,
+  },
+  notifiedText: { fontSize: 10, color: "#15803D", fontWeight: Font.weight.semibold },
   txAmount: { fontSize: Font.size.lg, fontWeight: Font.weight.black },
-  txRunning: { fontSize: 11, color: Colors.muted, marginTop: 2 },
+  txRunning: { fontSize: 11, color: Colors.muted },
+  txWaBtn: {
+    width: 36, height: 36, borderRadius: 18, backgroundColor: "#25D366",
+    alignItems: "center", justifyContent: "center", marginLeft: 4,
+  },
+  txWaBtnSent: { backgroundColor: "rgba(37, 211, 102, 0.15)" },
   empty: { alignItems: "center", paddingTop: Spacing.xxxl, gap: Spacing.md },
   emptyText: { fontSize: Font.size.lg, color: Colors.muted },
   bottomBar: {

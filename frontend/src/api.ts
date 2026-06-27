@@ -24,6 +24,7 @@ export type Customer = {
 export type Transaction = {
   id: string; customer_id: string; type: 'credit' | 'payment';
   amount: number; date: string; note: string; running_balance: number; created_at: string;
+  notified_at?: string | null;
 };
 
 export type Dashboard = {
@@ -53,6 +54,8 @@ export const Api = {
   addTx: (cid: string, body: { type: 'credit' | 'payment'; amount: number; date?: string; note?: string }) =>
     request<Transaction>(`/customers/${cid}/transactions`, { method: 'POST', body: JSON.stringify(body) }),
   deleteTx: (id: string) => request<{ ok: boolean }>(`/transactions/${id}`, { method: 'DELETE' }),
+  notifyTx: (id: string) =>
+    request<{ id: string; notified_at: string }>(`/transactions/${id}/notify`, { method: 'POST' }),
 
   seed: () => request<{ ok: boolean; customers: number }>('/seed', { method: 'POST' }),
 

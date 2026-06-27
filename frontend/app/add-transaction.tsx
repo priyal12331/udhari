@@ -39,8 +39,8 @@ export default function AddTransaction() {
     if (!num || num <= 0) return setErr("Sahi amount likhein");
     setBusy(true);
     try {
-      await Api.addTx(customerId, { type, amount: num, note });
-      router.replace(`/customer/${customerId}`);
+      const tx = await Api.addTx(customerId, { type, amount: num, note });
+      router.replace({ pathname: `/customer/${customerId}`, params: { notify_tx: tx.id } });
     } catch (e: any) { setErr(e?.message || "Error"); } finally { setBusy(false); }
   };
 
