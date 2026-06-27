@@ -4,6 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { Api } from "@/src/api";
+import { Auth } from "@/src/auth";
 import { Session } from "@/src/session";
 import { Colors, Font, Radius, Spacing } from "@/src/theme";
 
@@ -41,6 +42,12 @@ export default function SettingsTab() {
   const lock = async () => {
     await Session.lock();
     router.replace("/lock");
+  };
+
+  const logout = async () => {
+    await Session.lock();
+    await Auth.clear();
+    router.replace("/login");
   };
 
   return (
@@ -93,6 +100,15 @@ export default function SettingsTab() {
           <View style={{ flex: 1 }}>
             <Text style={styles.actionTitle}>App lock karein</Text>
             <Text style={styles.actionSub}>PIN dobara maanga jaayega</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={Colors.muted} />
+        </Pressable>
+
+        <Pressable testID="settings-logout" onPress={logout} style={styles.actionRow}>
+          <Ionicons name="log-out" size={22} color={Colors.udhaar} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.actionTitle}>Logout</Text>
+            <Text style={styles.actionSub}>Server login clear karega</Text>
           </View>
           <Ionicons name="chevron-forward" size={18} color={Colors.muted} />
         </Pressable>

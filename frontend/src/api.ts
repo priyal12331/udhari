@@ -1,12 +1,23 @@
-// Lightweight API client. Uses EXPO_PUBLIC_BACKEND_URL from env.
-const BASE = process.env.EXPO_PUBLIC_BACKEND_URL || '';
+import { Auth } from '@/src/auth';
+import { getBackendUrl } from '@/src/config';
 
-async function request<T>(path: string, opts: RequestInit = {}): Promise<T> {
+const BASE = getBackendUrl();
+
+async function request<T>(path: string, opts: RequestInit = {}, withAuth = true): Promise<T> {
   const url = `${BASE}/api${path}`;
+  const authHeaders = withAuth ? await Auth.getAuthHeader() : {};
   const res = await fetch(url, {
     ...opts,
-    headers: { 'Content-Type': 'application/json', ...(opts.headers || {}) },
+    headers: {
+      'Content-Type': 'application/json',
+      ...authHeaders,
+      ...(opts.headers || {}),
+    },
   });
+  if (res.status === 401 && withAuth) {
+    await Auth.clear();
+    throw new Error('API 401: Session expired — please login again');
+  }
   if (!res.ok) {
     const text = await res.text();
     throw new Error(`API ${res.status}: ${text}`);
@@ -35,6 +46,20 @@ export type Dashboard = {
 export type Setup = { shop_name: string; has_pin: boolean };
 
 export const Api = {
+  login: (username: string, password: string) =>
+    request<{ ok: boolean }>('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ username, password }),
+    }, false),
+
+  signup: (username: string, password: string) =>
+    request<{ ok: boolean; username: string }>('/auth/signup', {
+      method: 'POST',
+      body: JSON.stringify({ username, password }),
+    }, false),
+
+  health: () => request<{ ok: boolean }>('/health', {}, false),
+
   getSetup: () => request<Setup>('/setup'),
   postSetup: (shop_name: string, pin: string) =>
     request<Setup>('/setup', { method: 'POST', body: JSON.stringify({ shop_name, pin }) }),
@@ -62,7 +87,6 @@ export const Api = {
   parseVoiceText: (text: string) =>
     request<VoiceParse>('/voice/parse-text', { method: 'POST', body: JSON.stringify({ text }) }),
 
-  // For audio upload — special handling because of FormData
   parseVoice: async (uri: string): Promise<VoiceParse> => {
     const form = new FormData();
     const filename = uri.split('/').pop() || 'audio.m4a';
@@ -70,7 +94,16 @@ export const Api = {
     const mime = ext === 'wav' ? 'audio/wav' : ext === 'mp3' ? 'audio/mpeg' : 'audio/m4a';
     // @ts-ignore RN FormData file
     form.append('file', { uri, name: filename, type: mime });
-    const res = await fetch(`${BASE}/api/voice/parse`, { method: 'POST', body: form as any });
+    const authHeaders = await Auth.getAuthHeader();
+    const res = await fetch(`${BASE}/api/voice/parse`, {
+      method: 'POST',
+      body: form as any,
+      headers: authHeaders,
+    });
+    if (res.status === 401) {
+      await Auth.clear();
+      throw new Error('API 401: Session expired — please login again');
+    }
     if (!res.ok) throw new Error(`Voice parse failed: ${res.status}`);
     return res.json();
   },

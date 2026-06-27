@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, File
+from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, File, Depends, status
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -8,11 +8,14 @@ import hashlib
 import json
 import tempfile
 import re
+import secrets
 from pathlib import Path
 from pydantic import BaseModel, Field
 from typing import List, Optional, Literal
 import uuid
 from datetime import datetime, timezone, timedelta
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
+import bcrypt
 
 from emergentintegrations.llm.openai.speech_to_text import OpenAISpeechToText
 from emergentintegrations.llm.chat import LlmChat, UserMessage
@@ -27,9 +30,11 @@ client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
 EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY', '')
+AUTH_USERNAME = os.environ.get('AUTH_USERNAME', 'admin')
+AUTH_PASSWORD = os.environ.get('AUTH_PASSWORD', 'admin')
+security = HTTPBasic()
 
 app = FastAPI()
-api_router = APIRouter(prefix="/api")
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -40,6 +45,34 @@ def hash_pin(pin: str) -> str:
     return hashlib.sha256(pin.encode()).hexdigest()
 
 
+def hash_password(password: str) -> str:
+    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+
+
+def check_password(password: str, password_hash: str) -> bool:
+    return bcrypt.checkpw(password.encode(), password_hash.encode())
+
+
+async def verify_credentials(username: str, password: str) -> bool:
+    normalized = username.strip().lower()
+    user = await db.users.find_one({"username": normalized}, {"_id": 0, "password_hash": 1})
+    if user:
+        return check_password(password, user["password_hash"])
+    user_ok = secrets.compare_digest(normalized, AUTH_USERNAME.strip().lower())
+    pass_ok = secrets.compare_digest(password, AUTH_PASSWORD)
+    return user_ok and pass_ok
+
+
+async def require_basic_auth(credentials: HTTPBasicCredentials = Depends(security)) -> str:
+    if not await verify_credentials(credentials.username, credentials.password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid username or password",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+    return credentials.username.strip().lower()
+
+
 def now_utc() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -48,6 +81,10 @@ def iso(dt: datetime) -> str:
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
     return dt.isoformat()
+
+
+public_router = APIRouter(prefix="/api")
+api_router = APIRouter(prefix="/api", dependencies=[Depends(require_basic_auth)])
 
 
 # ---------- Models ----------
@@ -63,6 +100,16 @@ class SetupOut(BaseModel):
 
 class PinVerify(BaseModel):
     pin: str
+
+
+class LoginIn(BaseModel):
+    username: str
+    password: str
+
+
+class SignupIn(BaseModel):
+    username: str
+    password: str
 
 
 class CustomerCreate(BaseModel):
@@ -116,24 +163,60 @@ class VoiceParseOut(BaseModel):
     matched_customer_name: Optional[str] = None
 
 
+# ---------- Public routes (no auth) ----------
+@public_router.get("/health")
+async def health():
+    return {"ok": True}
+
+
+@public_router.post("/auth/login")
+async def login(payload: LoginIn):
+    if not await verify_credentials(payload.username, payload.password):
+        raise HTTPException(401, "Invalid username or password")
+    return {"ok": True, "username": payload.username.strip().lower()}
+
+
+@public_router.post("/auth/signup")
+async def signup(payload: SignupIn):
+    username = payload.username.strip().lower()
+    if len(username) < 3:
+        raise HTTPException(400, "Username kam se kam 3 characters ka ho")
+    if not re.match(r"^[a-z0-9_]+$", username):
+        raise HTTPException(400, "Username mein sirf letters, numbers, underscore")
+    if len(payload.password) < 4:
+        raise HTTPException(400, "Password kam se kam 4 characters ka ho")
+    if await db.users.find_one({"username": username}):
+        raise HTTPException(409, "Username pehle se use ho raha hai")
+    await db.users.insert_one({
+        "username": username,
+        "password_hash": hash_password(payload.password),
+        "created_at": iso(now_utc()),
+    })
+    return {"ok": True, "username": username}
+
+
 # ---------- Setup / Auth ----------
 @api_router.get("/setup", response_model=SetupOut)
-async def get_setup():
-    doc = await db.settings.find_one({"_id": "settings"}, {"_id": 0})
+async def get_setup(owner: str = Depends(require_basic_auth)):
+    doc = await db.settings.find_one({"owner": owner}, {"_id": 0})
     if not doc:
+        legacy = await db.settings.find_one({"_id": "settings"}, {"_id": 0})
+        if legacy and owner == AUTH_USERNAME.strip().lower():
+            return SetupOut(shop_name=legacy.get("shop_name", ""), has_pin=bool(legacy.get("pin_hash")))
         return SetupOut(shop_name="", has_pin=False)
     return SetupOut(shop_name=doc.get("shop_name", ""), has_pin=bool(doc.get("pin_hash")))
 
 
 @api_router.post("/setup", response_model=SetupOut)
-async def post_setup(payload: SetupCreate):
+async def post_setup(payload: SetupCreate, owner: str = Depends(require_basic_auth)):
     if not payload.shop_name.strip():
         raise HTTPException(400, "Shop name required")
     if not payload.pin or len(payload.pin) < 4 or not payload.pin.isdigit():
         raise HTTPException(400, "PIN must be at least 4 digits")
     await db.settings.update_one(
-        {"_id": "settings"},
+        {"owner": owner},
         {"$set": {
+            "owner": owner,
             "shop_name": payload.shop_name.strip(),
             "pin_hash": hash_pin(payload.pin),
             "updated_at": iso(now_utc()),
@@ -144,8 +227,12 @@ async def post_setup(payload: SetupCreate):
 
 
 @api_router.post("/auth/verify-pin")
-async def verify_pin(payload: PinVerify):
-    doc = await db.settings.find_one({"_id": "settings"}, {"_id": 0})
+async def verify_pin(payload: PinVerify, owner: str = Depends(require_basic_auth)):
+    doc = await db.settings.find_one({"owner": owner}, {"_id": 0})
+    if not doc:
+        legacy = await db.settings.find_one({"_id": "settings"}, {"_id": 0})
+        if legacy and owner == AUTH_USERNAME.strip().lower():
+            doc = legacy
     if not doc or not doc.get("pin_hash"):
         raise HTTPException(404, "Setup not done")
     ok = hash_pin(payload.pin) == doc["pin_hash"]
@@ -157,15 +244,15 @@ class ShopNameUpdate(BaseModel):
 
 
 @api_router.put("/setup/shop-name", response_model=SetupOut)
-async def update_shop_name(payload: ShopNameUpdate):
+async def update_shop_name(payload: ShopNameUpdate, owner: str = Depends(require_basic_auth)):
     if not payload.shop_name.strip():
         raise HTTPException(400, "Shop name required")
     await db.settings.update_one(
-        {"_id": "settings"},
-        {"$set": {"shop_name": payload.shop_name.strip()}},
+        {"owner": owner},
+        {"$set": {"owner": owner, "shop_name": payload.shop_name.strip()}},
         upsert=True
     )
-    doc = await db.settings.find_one({"_id": "settings"}, {"_id": 0})
+    doc = await db.settings.find_one({"owner": owner}, {"_id": 0})
     return SetupOut(shop_name=doc.get("shop_name", ""), has_pin=bool(doc.get("pin_hash")))
 
 
@@ -232,8 +319,15 @@ def _compute_view_from_txs(customer: dict, txs: List[dict]) -> CustomerOut:
     )
 
 
+async def _get_owned_customer(customer_id: str, owner: str) -> dict:
+    c = await db.customers.find_one({"id": customer_id, "owner": owner}, {"_id": 0})
+    if not c:
+        raise HTTPException(404, "Customer not found")
+    return c
+
+
 @api_router.post("/customers", response_model=CustomerOut)
-async def create_customer(payload: CustomerCreate):
+async def create_customer(payload: CustomerCreate, owner: str = Depends(require_basic_auth)):
     name = payload.name.strip()
     phone = payload.phone.strip()
     if not name:
@@ -242,6 +336,7 @@ async def create_customer(payload: CustomerCreate):
         raise HTTPException(400, "Phone required")
     cust = {
         "id": str(uuid.uuid4()),
+        "owner": owner,
         "name": name,
         "phone": phone,
         "created_at": iso(now_utc()),
@@ -252,8 +347,8 @@ async def create_customer(payload: CustomerCreate):
 
 
 @api_router.get("/customers", response_model=List[CustomerOut])
-async def list_customers():
-    customers = await db.customers.find({}, {"_id": 0}).sort("created_at", -1).limit(500).to_list(500)
+async def list_customers(owner: str = Depends(require_basic_auth)):
+    customers = await db.customers.find({"owner": owner}, {"_id": 0}).sort("created_at", -1).limit(500).to_list(500)
     cust_ids = [c["id"] for c in customers]
     # Single batched query for all transactions belonging to these customers
     all_txs = await db.transactions.find(
@@ -267,10 +362,8 @@ async def list_customers():
 
 
 @api_router.get("/customers/{customer_id}", response_model=CustomerOut)
-async def get_customer(customer_id: str):
-    c = await db.customers.find_one({"id": customer_id}, {"_id": 0})
-    if not c:
-        raise HTTPException(404, "Customer not found")
+async def get_customer(customer_id: str, owner: str = Depends(require_basic_auth)):
+    c = await _get_owned_customer(customer_id, owner)
     txs = await db.transactions.find(
         {"customer_id": customer_id},
         {"_id": 0, "type": 1, "amount": 1, "date": 1},
@@ -279,18 +372,17 @@ async def get_customer(customer_id: str):
 
 
 @api_router.delete("/customers/{customer_id}")
-async def delete_customer(customer_id: str):
-    await db.customers.delete_one({"id": customer_id})
+async def delete_customer(customer_id: str, owner: str = Depends(require_basic_auth)):
+    await _get_owned_customer(customer_id, owner)
+    await db.customers.delete_one({"id": customer_id, "owner": owner})
     await db.transactions.delete_many({"customer_id": customer_id})
     return {"ok": True}
 
 
 # ---------- Transactions ----------
 @api_router.post("/customers/{customer_id}/transactions", response_model=TransactionOut)
-async def add_transaction(customer_id: str, payload: TransactionCreate):
-    c = await db.customers.find_one({"id": customer_id}, {"_id": 0})
-    if not c:
-        raise HTTPException(404, "Customer not found")
+async def add_transaction(customer_id: str, payload: TransactionCreate, owner: str = Depends(require_basic_auth)):
+    await _get_owned_customer(customer_id, owner)
     if payload.amount <= 0:
         raise HTTPException(400, "Amount must be > 0")
 
@@ -327,7 +419,8 @@ async def add_transaction(customer_id: str, payload: TransactionCreate):
 
 
 @api_router.get("/customers/{customer_id}/transactions", response_model=List[TransactionOut])
-async def list_transactions(customer_id: str):
+async def list_transactions(customer_id: str, owner: str = Depends(require_basic_auth)):
+    await _get_owned_customer(customer_id, owner)
     txs = await db.transactions.find(
         {"customer_id": customer_id},
         {"_id": 0, "id": 1, "customer_id": 1, "type": 1, "amount": 1, "date": 1, "note": 1, "created_at": 1, "notified_at": 1},
@@ -353,7 +446,11 @@ class NotifyOut(BaseModel):
 
 
 @api_router.post("/transactions/{tx_id}/notify", response_model=NotifyOut)
-async def mark_notified(tx_id: str):
+async def mark_notified(tx_id: str, owner: str = Depends(require_basic_auth)):
+    tx = await db.transactions.find_one({"id": tx_id}, {"_id": 0, "customer_id": 1})
+    if not tx:
+        raise HTTPException(404, "Transaction not found")
+    await _get_owned_customer(tx["customer_id"], owner)
     ts = iso(now_utc())
     res = await db.transactions.update_one(
         {"id": tx_id},
@@ -365,15 +462,18 @@ async def mark_notified(tx_id: str):
 
 
 @api_router.delete("/transactions/{tx_id}")
-async def delete_tx(tx_id: str):
+async def delete_tx(tx_id: str, owner: str = Depends(require_basic_auth)):
+    tx = await db.transactions.find_one({"id": tx_id}, {"_id": 0, "customer_id": 1})
+    if tx:
+        await _get_owned_customer(tx["customer_id"], owner)
     await db.transactions.delete_one({"id": tx_id})
     return {"ok": True}
 
 
 # ---------- Dashboard ----------
 @api_router.get("/dashboard", response_model=DashboardOut)
-async def dashboard():
-    customers = await db.customers.find({}, {"_id": 0}).sort("created_at", -1).limit(500).to_list(500)
+async def dashboard(owner: str = Depends(require_basic_auth)):
+    customers = await db.customers.find({"owner": owner}, {"_id": 0}).sort("created_at", -1).limit(500).to_list(500)
     cust_ids = [c["id"] for c in customers]
     all_txs = await db.transactions.find(
         {"customer_id": {"$in": cust_ids}},
@@ -430,7 +530,7 @@ def _parse_command_locally(text: str, customers: List[dict]) -> dict:
 
 
 @api_router.post("/voice/parse", response_model=VoiceParseOut)
-async def voice_parse(file: UploadFile = File(...)):
+async def voice_parse(file: UploadFile = File(...), owner: str = Depends(require_basic_auth)):
     if not EMERGENT_LLM_KEY:
         raise HTTPException(500, "EMERGENT_LLM_KEY not configured")
 
@@ -467,7 +567,7 @@ async def voice_parse(file: UploadFile = File(...)):
             pass
 
     customers = await db.customers.find(
-        {}, {"_id": 0, "id": 1, "name": 1},
+        {"owner": owner}, {"_id": 0, "id": 1, "name": 1},
     ).limit(500).to_list(500)
 
     # LLM parse
@@ -532,9 +632,9 @@ class VoiceTextIn(BaseModel):
 
 
 @api_router.post("/voice/parse-text", response_model=VoiceParseOut)
-async def voice_parse_text(payload: VoiceTextIn):
+async def voice_parse_text(payload: VoiceTextIn, owner: str = Depends(require_basic_auth)):
     customers = await db.customers.find(
-        {}, {"_id": 0, "id": 1, "name": 1},
+        {"owner": owner}, {"_id": 0, "id": 1, "name": 1},
     ).limit(500).to_list(500)
     parsed = _parse_command_locally(payload.text, customers)
     return VoiceParseOut(
@@ -549,10 +649,11 @@ async def voice_parse_text(payload: VoiceTextIn):
 
 # ---------- Seed ----------
 @api_router.post("/seed")
-async def seed_data():
-    # Always reset demo state to a known good shape
-    await db.customers.delete_many({})
-    await db.transactions.delete_many({})
+async def seed_data(owner: str = Depends(require_basic_auth)):
+    existing = await db.customers.find({"owner": owner}, {"id": 1}).to_list(10000)
+    if existing:
+        await db.transactions.delete_many({"customer_id": {"$in": [c["id"] for c in existing]}})
+    await db.customers.delete_many({"owner": owner})
 
     samples = [
         ("Ramesh Kumar", "+919876543210", [
@@ -578,7 +679,7 @@ async def seed_data():
     for name, phone, txs in samples:
         cid = str(uuid.uuid4())
         await db.customers.insert_one({
-            "id": cid, "name": name, "phone": phone,
+            "id": cid, "owner": owner, "name": name, "phone": phone,
             "created_at": iso(now_utc() - timedelta(days=60))
         })
         for ttype, amt, days_ago, note in txs:
@@ -600,6 +701,7 @@ async def root():
     return {"message": "Kirana Udhaar API"}
 
 
+app.include_router(public_router)
 app.include_router(api_router)
 
 app.add_middleware(

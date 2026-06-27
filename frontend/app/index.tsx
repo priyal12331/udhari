@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { View, ActivityIndicator, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
 import { Api } from "@/src/api";
+import { Auth } from "@/src/auth";
 import { Session } from "@/src/session";
 import { Colors } from "@/src/theme";
 
@@ -11,6 +12,11 @@ export default function Index() {
   useEffect(() => {
     (async () => {
       try {
+        const loggedIn = await Auth.isLoggedIn();
+        if (!loggedIn) {
+          router.replace("/signup");
+          return;
+        }
         const setup = await Api.getSetup();
         if (!setup.has_pin || !setup.shop_name) {
           router.replace("/setup");
@@ -22,7 +28,11 @@ export default function Index() {
           return;
         }
         router.replace("/(tabs)");
-      } catch (e) {
+      } catch (e: any) {
+        if (e?.message?.includes("401")) {
+          router.replace("/login");
+          return;
+        }
         // If backend down, fall through to setup
         router.replace("/setup");
       }
