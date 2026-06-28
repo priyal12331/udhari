@@ -5,7 +5,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { AudioModule, useAudioRecorder, RecordingPresets } from "expo-audio";
+import { AudioModule, useAudioRecorder, RecordingPresets, setAudioModeAsync } from "expo-audio";
 import * as Haptics from "expo-haptics";
 import Animated, { useAnimatedStyle, useSharedValue, withRepeat, withTiming, withSequence } from "react-native-reanimated";
 import { Api, VoiceParse } from "@/src/api";
@@ -28,6 +28,14 @@ export default function VoiceTab() {
     (async () => {
       const p = await AudioModule.requestRecordingPermissionsAsync();
       setPermission(p.granted);
+
+      // Set audio mode once on mount — required for iOS recording
+      if (Platform.OS === "ios") {
+        await setAudioModeAsync({
+          allowsRecording: true,
+          playsInSilentMode: true,
+        });
+      }
     })();
   }, []);
 
@@ -58,10 +66,9 @@ export default function VoiceTab() {
     try {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
 
-      // Fix: Set audio mode for iOS recording BEFORE prepareToRecordAsync
-      await AudioModule.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
+      await setAudioModeAsync({
+        allowsRecording: true,
+        playsInSilentMode: true,
       });
 
       await recorder.prepareToRecordAsync();
@@ -78,9 +85,8 @@ export default function VoiceTab() {
       await recorder.stop();
       setRecording(false);
 
-      // Fix: Reset audio mode after recording stops
-      await AudioModule.setAudioModeAsync({
-        allowsRecordingIOS: false,
+      await setAudioModeAsync({
+        allowsRecording: false,
       });
 
       const uri = recorder.uri;
